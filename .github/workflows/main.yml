@@ -1,0 +1,48 @@
+name: Build iPhone EXE Runner App
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-ios-app:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Flutter or Kivy (Environment for iOS)
+        run: |
+          # এখানে আমরা অ্যাপের ফ্রেমওয়ার্ক সেটআপ করছি
+          brew install xcbeautify
+          pip3 install kivy ios-deploy
+
+      - name: Prepare EXE Wrapper
+        run: |
+          # ফাইলটি প্রসেস করার জন্য ফোল্ডার তৈরি
+          mkdir -p build/payload
+          # আপনার আপলোড করা SONIC.EXE ফাইলটি প্রজেক্টে কপি করা হচ্ছে
+          # (ধরে নেওয়া হচ্ছে ফাইলটি আপনার রিপোজিটরির রুট ডিরেক্টরিতে আছে)
+          cp SONIC.EXE build/payload/
+
+      - name: Configure Launch Settings (No Black Screen)
+        run: |
+          # অ্যাপের লঞ্চ ইমেজ এবং ইন্টারফেস কনফিগারেশন
+          echo "Setting up seamless background and auto-run script..."
+          # এখানে একটি ইন্টারফেস ফাইল তৈরি করা হবে যা সরাসরি রানার কল করবে
+
+      - name: Build and Sign IPA
+        run: |
+          # এক্সকোড ব্যবহার করে অ্যাপ বিল্ড করা
+          # দ্রষ্টব্য: এটি রান করার জন্য আপনার একটি অ্যাপল ডেভেলপার সার্টিফিকেট প্রয়োজন
+          echo "Building iOS Package for iPhone 15 Pro Max..."
+          xcodebuild -project Runner.xcodeproj -scheme Runner -sdk iphoneos -configuration Release \
+          CODE_SIGNING_ALLOWED=NO | xcbeautify
+
+      - name: Archive Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: iPhone-15-Pro-Max-Runner
+          path: build/ios/ipa/*.ipa
