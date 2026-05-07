@@ -1,140 +1,51 @@
-name: GameHub Pro - A17 PC Engine Builder
-
+name: Build Windows Emulator IPA for iOS
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build_and_package:
-    name: "Build iPhone 15 Pro Max Game Engine"
+  build:
     runs-on: macos-latest
     steps:
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Install Build Tools
-        run: brew install xcodegen
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest
 
-      # ১. রানটাইম ডিপেন্ডেন্সি ডাউনলোড (Wine, DXVK, MoltenVK)
-      - name: Setup PC Runtimes
+      - name: Install Dependencies
         run: |
-          mkdir -p deps/vcredist deps/directx deps/dxvk deps/moltenvk
-          curl -fsSL "https://aka.ms/vs/17/release/vc_redist.x64.exe" -o deps/vcredist/vc_redist_2022_x64.exe
-          curl -fsSL "https://github.com/doitsujin/dxvk/releases/download/v2.4/dxvk-2.4.tar.gz" -o deps/dxvk/dxvk.tar.gz
-          echo "✅ Runtimes Ready"
+          brew install dpkg
+          # এখানে Wine বা Emulation প্যাকের প্রয়োজনীয় টুলস ইনস্টল হবে
 
-      # ২. আইফোন অ্যাপের সোর্স কোড জেনারেশন (Swift UI & Core Engine)
-      - name: Generate App Source Code
+      - name: Integrate Windows Compatibility Layer
         run: |
-          mkdir -p GameHub/Sources/Core GameHub/Sources/UI GameHub/Resources
-          
-          # Swift Core: JIT & Memory Alignment (For A17 Pro 16K Page)
-          cat > GameHub/Sources/Core/Engine.swift << 'EOF'
-          import Foundation
-          class GameEngine {
-              static let shared = GameEngine()
-              func initPCEnvironment() {
-                  print("Initializing x86_64 to ARM64 Translation...")
-                  // A17 Pro hardware ray tracing & JIT setup logic
-              }
-          }
-          EOF
-
-          # SwiftUI: High-Tech Boot Screen (Avoiding Black Screen)
-          cat > GameHub/Sources/UI/MainView.swift << 'EOF'
-          import SwiftUI
-          struct RootView: View {
-              @State private var isBooting = true
-              @State private var logs = ["Starting A17 Pro Engine...", "Loading Wine Prefix...", "Detecting GPU..."]
-              
-              var body: some View {
-                  ZStack {
-                      Color.black.ignoresSafeArea()
-                      if isBooting {
-                          VStack(alignment: .leading) {
-                              Text("GAMEHUB PRO OS v3.0").font(.headline).foregroundColor(.cyan)
-                              ForEach(logs, id: \.self) { log in
-                                  Text("> \(log)").font(.system(.caption, design: .monospaced)).foregroundColor(.green)
-                              }
-                              ProgressView().tint(.cyan).padding()
-                          }.onAppear {
-                              DispatchQueue.main.asyncAfter(deadline: .now() + 3) { isBooting = false }
-                          }
-                      } else {
-                          DesktopView()
-                      }
-                  }
-              }
-          }
-
-          struct DesktopView: View {
-              var body: some View {
-                  VStack {
-                      Image(systemName: "gamecontroller.fill").font(.largeTitle).foregroundColor(.cyan)
-                      Text("Sonic.exe Ready").foregroundColor(.white)
-                      Button("RUN EXE") { print("Executing Windows Binary...") }
-                          .padding().background(Color.blue).cornerRadius(10)
-                  }
-              }
-          }
-          EOF
-
-          # Main Entry Point
-          cat > GameHub/Sources/App.swift << 'EOF'
-          import SwiftUI
-          @main struct GameHubApp: App {
-              var body: some Scene { WindowGroup { RootView() } }
-          }
-          EOF
-
-          # Info.plist: JIT ও ফাইল পারমিশন সেটআপ
-          cat > GameHub/Info.plist << 'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>CFBundleIdentifier</key><string>com.rabbi.gamehub</string>
-            <key>CFBundleName</key><string>GameHub Pro</string>
-            <key>UIFileSharingEnabled</key><true/>
-            <key>LSSupportsOpeningDocumentsInPlace</key><true/>
-            <key>get-task-allow</key><true/>
-          </dict>
-          </plist>
-          EOF
-
-          # Xcode Project Generator (xcodegen)
-          cat > project.yml << 'EOF'
-          name: GameHub
-          targets:
-            GameHub:
-              type: application
-              platform: iOS
-              deploymentTarget: "17.0"
-              sources: [GameHub/Sources]
-              info: { path: GameHub/Info.plist }
-              settings: { CODE_SIGNING_ALLOWED: NO }
-          EOF
-
-      # ৩. অ্যাপ কম্পাইল এবং পিসি ফাইল ইনজেকশন
-      - name: Build IPA
-        run: |
-          xcodegen generate
-          xcodebuild archive -project GameHub.xcodeproj -scheme GameHub -sdk iphoneos -archivePath build/GameHub.xcarchive CODE_SIGNING_ALLOWED=NO
-          
+          # এটি একটি কাল্পনিক বিল্ড স্ক্রিপ্ট যা লোকাল ফাইল হ্যান্ডলিং এনভায়রনমেন্ট সেটআপ করবে
           mkdir -p build/Payload
-          cp -r build/GameHub.xcarchive/Products/Applications/GameHub.app build/Payload/
+          cd build/Payload
           
-          # ইনজেকটিং রানটাইম ফাইলস (যাতে ব্ল্যাক স্ক্রিন না আসে)
-          mkdir -p build/Payload/GameHub.app/Runtime
-          cp -r deps/vcredist build/Payload/GameHub.app/Runtime/
+          # এখানে একটি ইন্টারফেস তৈরি করা হবে যা .exe ফাইল ইনপুট নিতে পারে
+          echo "Initializing Windows Environment (Legacy Version)..."
           
-          cd build
-          zip -r GameHub_A17_Pro.ipa Payload/
+          # ল্যান্ডস্কেপ মোড ফোর্স করার জন্য প্লািস্ট ফাইল কনফিগারেশন
+          cat <<EOF > Info.plist
+          <key>UIInterfaceOrientation</key>
+          <string>UIInterfaceOrientationLandscapeLeft</string>
+          <key>UISupportedInterfaceOrientations</key>
+          <array>
+            <string>UIInterfaceOrientationLandscapeLeft</string>
+            <string>UIInterfaceOrientationLandscapeRight</string>
+          </array>
+EOF
 
-      # ৪. ফাইনাল IPA ফাইল আপলোড
+      - name: Create IPA Package
+        run: |
+          cd build
+          zip -r ../WindowsRunner.ipa Payload
+          
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GameHub-iPhone15ProMax
-          path: build/GameHub_A17_Pro.ipa
+          name: WindowsRunner-IPA
+          path: WindowsRunner.ipa
