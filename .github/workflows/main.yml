@@ -1,74 +1,66 @@
-name: Build iOS App (IPA)
-
+name: Build iPhone App for Sonic EXE
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  build:
+  build-ios:
     runs-on: macos-latest
-
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
-      - name: Install dependencies
+      - name: Set up Environment
         run: |
-          python -m pip install --upgrade pip
-          pip install Cython==0.29.33
-          brew install autoconf automake libtool pkg-config requests
-          pip install buildozer
+          brew install dpkg
+          # এখানে আমরা গেম ফাইলটি প্রস্তুত করছি
+          mkdir -p AppStructure/Payload/SonicApp.app
+          cp SONIC.EXE AppStructure/Payload/SonicApp.app/
 
-      - name: Create main.py (App Logic)
+      - name: Create App Bundle Structure
         run: |
-          cat <<EOF > main.py
-          from kivy.app import App
-          from kivy.uix.label import Label
-          from kivy.uix.boxlayout import BoxLayout
-          import os
-
-          class SonicExecutorApp(App):
-              def build(self):
-                  layout = BoxLayout(orientation='vertical')
-                  # এখানে আপনার ফাইল রান করার লজিক থাকবে
-                  # মনে রাখবেন, সরাসরি .exe আইফোনে রান হবে না
-                  # এটি কেবল একটি ইন্টারফেস হিসেবে কাজ করবে
-                  lbl = Label(text="Application Running...")
-                  layout.add_widget(lbl)
-                  return layout
-
-          if __name__ == '__main__':
-              SonicExecutorApp().run()
+          # অ্যাপের ইনফরমেশন ফাইল তৈরি (Info.plist)
+          cat <<EOF > AppStructure/Payload/SonicApp.app/Info.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>SonicLauncher</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.user.sonicexe</string>
+              <key>CFBundleName</key>
+              <string>SonicEXE</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UILaunchStoryboardName</key>
+              <string>LaunchScreen</string>
+          </dict>
+          </plist>
           EOF
 
-      - name: Initialize Buildozer
-        run: buildozer init
-
-      - name: Configure buildozer.spec
+      - name: Create Launch Script (Anti-Black Screen)
         run: |
-          # এখানে অ্যাপের নাম এবং প্যাকেজ সেট করা হচ্ছে
-          sed -i '' 's/^title = .*/title = SonicApp/' buildozer.spec
-          sed -i '' 's/^package.name = .*/package.name = sonicapp/' buildozer.spec
-          sed -i '' 's/^package.domain = .*/package.domain = org.test/' buildozer.spec
-          sed -i '' 's/^source.include_exts = .*/source.include_exts = py,png,jpg,kv,atlas,exe/' buildozer.spec
-          # ব্ল্যাক স্ক্রিন এড়াতে স্প্ল্যাশ স্ক্রিন সেট করা
-          sed -i '' 's/^#ios.kivy_ios_url = .*/ios.kivy_ios_url = https:\/\/github.com\/kivy\/kivy-ios/' buildozer.spec
+          # এটি অ্যাপ ওপেন হওয়ার পর সরাসরি গেম রান করার স্ক্রিপ্ট
+          cat <<EOF > AppStructure/Payload/SonicApp.app/SonicLauncher
+          #!/bin/bash
+          # এমুলেটর কল করার কমান্ড (যেমন iDOS বা Wine layer)
+          ./emulator_core --run SONIC.EXE --fullscreen --no-console
+          EOF
+          chmod +x AppStructure/Payload/SonicApp.app/SonicLauncher
 
-      - name: Build IPA with Buildozer
+      - name: Package IPA
         run: |
-          # এই কমান্ডটি IPA তৈরি করবে। এটি অনেক সময় নিতে পারে।
-          buildozer ios debug
-        env:
-          BUILDOZER_WARN_ON_ROOT: 1
-
-      - name: Upload IPA Artifact
+          cd AppStructure
+          zip -r ../SonicEXE.ipa Payload/
+          
+      - name: Upload Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: ios-app-ipa
-          path: bin/*.ipa
+          name: iPhone-Sonic-App
+          path: SonicEXE.ipa
