@@ -1,51 +1,113 @@
-name: Build Windows Emulator IPA for iOS
+name: Build Windows x86 Emulator IPA
+
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-ios-emulator:
     runs-on: macos-latest
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Set up Xcode Environment
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
 
-      - name: Set up Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest
+      - name: Install xcodegen
+        run: brew install xcodegen
 
-      - name: Install Dependencies
+      - name: Create Project Directory structure
         run: |
-          brew install dpkg
-          # এখানে Wine বা Emulation প্যাকের প্রয়োজনীয় টুলস ইনস্টল হবে
+          mkdir -p WinEmuApp/Sources
+          mkdir -p WinEmuApp/Resources
 
-      - name: Integrate Windows Compatibility Layer
+      - name: Generate Swift Source Code (Landscape WebView with x86 Core)
         run: |
-          # এটি একটি কাল্পনিক বিল্ড স্ক্রিপ্ট যা লোকাল ফাইল হ্যান্ডলিং এনভায়রনমেন্ট সেটআপ করবে
-          mkdir -p build/Payload
-          cd build/Payload
-          
-          # এখানে একটি ইন্টারফেস তৈরি করা হবে যা .exe ফাইল ইনপুট নিতে পারে
-          echo "Initializing Windows Environment (Legacy Version)..."
-          
-          # ল্যান্ডস্কেপ মোড ফোর্স করার জন্য প্লািস্ট ফাইল কনফিগারেশন
-          cat <<EOF > Info.plist
-          <key>UIInterfaceOrientation</key>
-          <string>UIInterfaceOrientationLandscapeLeft</string>
-          <key>UISupportedInterfaceOrientations</key>
-          <array>
-            <string>UIInterfaceOrientationLandscapeLeft</string>
-            <string>UIInterfaceOrientationLandscapeRight</string>
-          </array>
-EOF
+          cat << 'EOF' > WinEmuApp/Sources/App.swift
+          import SwiftUI
+          @main
+          struct WinEmuApp: App {
+              var body: some Scene {
+                  WindowGroup {
+                      ContentView()
+                  }
+              }
+          }
+          EOF
 
-      - name: Create IPA Package
+          cat << 'EOF' > WinEmuApp/Sources/ContentView.swift
+          import SwiftUI
+          import WebKit
+
+          struct EmulatorWebView: UIViewRepresentable {
+              func makeUIView(context: Context) -> WKWebView {
+                  let config = WKWebViewConfiguration()
+                  config.allowsInlineMediaPlayback = true
+                  let webView = WKWebView(frame: .zero, configuration: config)
+                  webView.scrollView.isScrollEnabled = false
+                  webView.scrollView.bounces = false
+                  
+                  // Load v86 Emulator Core (x86 Architecture)
+                  if let url = URL(string: "https://copy.sh/v86/?profile=windows2000") {
+                      webView.load(URLRequest(url: url))
+                  }
+                  return webView
+              }
+
+              func updateUIView(_ uiView: WKWebView, context: Context) {}
+          }
+
+          struct ContentView: View {
+              var body: some View {
+                  EmulatorWebView()
+                      .edgesIgnoringSafeArea(.all)
+                      .background(Color.black) // Prevents white flashes, maintains dark aesthetic
+              }
+          }
+          EOF
+
+      - name: Create project.yml for xcodegen
         run: |
-          cd build
-          zip -r ../WindowsRunner.ipa Payload
-          
-      - name: Upload Artifact
+          cat << 'EOF' > project.yml
+          name: WinEmuApp
+          options:
+            bundleIdPrefix: com.custom.winemu
+          targets:
+            WinEmuApp:
+              type: application
+              platform: iOS
+              deploymentTarget: "15.0"
+              sources: [WinEmuApp/Sources]
+              info:
+                path: Info.plist
+                properties:
+                  UILaunchStoryboardName: LaunchScreen
+                  UISupportedInterfaceOrientations: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+                  UISupportedInterfaceOrientations~ipad: [UIInterfaceOrientationLandscapeLeft, UIInterfaceOrientationLandscapeRight]
+                  UIRequiresFullScreen: true
+                  WKAppBoundDomains: ["copy.sh"]
+          EOF
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Build Xcode Project (Unsigned for Sideloading)
+        run: |
+          xcodebuild clean build \
+            -project WinEmuApp.xcodeproj \
+            -scheme WinEmuApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Package into IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/Build/Products/Release-iphoneos/WinEmuApp.app Payload/
+          zip -r WinEmuApp.ipa Payload
+
+      - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: WindowsRunner-IPA
-          path: WindowsRunner.ipa
+          name: WinEmuApp-Landscape
+          path: WinEmuApp.ipa
